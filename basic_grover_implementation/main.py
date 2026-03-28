@@ -18,5 +18,21 @@ world = [(-0.5,-0.5),(0.5,-0.5), (0.5,0.5),(-0.5,0.5)]
 # All rays are gonna have a constant y direction 1
 rays = [i/(num_qbits) - 0.5 for i in range(num_qbits)]
 
+target = (0,0)
+ray_origin = (0,-0.5)
+
+
+# CPU versions of code
+def raydata(dir):
+    pass 
+
+def draw(dir):
+    data = raydata(dir)
+
+def trace(dir):
+    return None
+
+
+
 
 
