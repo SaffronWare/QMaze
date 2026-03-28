@@ -87,45 +87,51 @@ class DigitalSolver:
 
         plt.show()
 
+
+
+scaling_for_quantum_computation = 8 # bits
 class QuantumSolver:
     @staticmethod
-    def Oracle(circuit):
-        pass 
+    def Oracle(qc):
+        K = round(1/(2**num_qbits - 1) * 2**scaling_for_quantum_computation)
+        tx, ty = target[0] * 2**scaling_for_quantum_computation, target[1] * 2**scaling_for_quantum_computation
+        tx,ty = round(tx),round(ty)
+        
+        
 
     @staticmethod
-    def Diffuse(circuit):
-        pass
+    def Diffuse(qc : QuantumCircuit):
+        # bring avg to 1111 state
+        qc.h(range(num_qbits))
+        qc.x(range(num_qbits))        
+
+        # multi controled z inversion
+        qc.h(num_qbits - 1)
+        qc.mcx(list(range(num_qbits - 1)), num_qbits - 1)
+        qc.h(num_qbits - 1)
+
+        # go back to normal basis
+        qc.x(range(num_qbits))
+        qc.h(range(num_qbits))
+            
     
     @staticmethod
     def Grover():
         num_grover_steps = 4
-        # Initializes qubits
-        qc = QuantumCircuit(num_qbits, num_qbits)
+        # Initializes qubits + 1 extra bit for ancilla
+        qc = QuantumCircuit(num_qbits+1, num_qbits)
 
         # Places everything in an equal superposition
         # usin hadamard gate
+        qc.x(range(num_qbits))
         qc.h(range(num_qbits))
 
         for i in range(num_grover_steps):
             QuantumSolver.Oracle(qc)
             QuantumSolver.Diffuse(qc)
 
-
-        # condition we want to check is if abs((target[1] + 0.5)*dir - target[0])) < radius
-        # target[1] + 0.5 is a cpu computed constant
-        # same for target[0]
-        # Now, id say we only need to worry about calculating dir first
-        # On cpu we did dir = i (qubit value ID) / (2**n_qubit - 1) - 0.5
-        # We can compute the constant 1/(2**n_qubit - 1) on digital circuit
-        # Call this K
-        K = 1/(2**num_qbits - 1)
-        # 0.5 also a constant
-
-
         qc.measure(range(num_qbits), range(num_qbits))
-
-
-        print(qc)
+  
         return qc
 
 
