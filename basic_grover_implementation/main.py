@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+import random
+
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.compiler import transpile
 from qiskit_aer import AerSimulator
@@ -19,7 +21,7 @@ world_border = 0.2
 # All rays are gonna have a constant y direction 1
 rays = [i/(2**num_qbits-1) - 0.5 for i in range(2**num_qbits)]
 
-target = (0,0)
+target = (random.uniform(-0.4,0.4),random.uniform(-0.4,0.4))
 ray_origin = (0,-0.5)
 
 
@@ -30,15 +32,26 @@ def raydata(dir):
         t = min(0.5/abs(dir),t)
     return np.linspace(0, t, 50, True)
 
-def draw(dir, ax):
-    data = raydata(dir)
-    ax.plot(dir*data,data-0.5)
+def findr(directions,ax):
+    out = [[],[]]
+    for i,dir in enumerate(directions):
+        # should travel along y
+        ty = target[1] + 0.5
+        # should travel along x
+        x_reach = ty*dir
 
-def trace(dir):
-    return None
+        if abs(x_reach - target[0]) <= 0.02:
+            out[0].append(i)
+            out[1].append(dir)
+        
+        s=0.5
+        #print(abs(ty-tx))
+    
+    return out
+
 
 fig,ax = plt.subplots()
-
+ax.set_aspect(1)
 ax.set_xlim((-0.5-world_border,0.5+world_border))
 ax.set_ylim((-0.5-world_border,0.5+world_border))
 
@@ -51,12 +64,23 @@ rect = patches.Rectangle(
     facecolor='none' 
 )
 
-ax.add_patch(rect)
+circle = patches.Circle(
+    target, 0.02
+)
 
-# drawing
-for ray in rays:
-    draw(ray, ax)
-    pass
+ax.add_patch(rect)
+ax.add_patch(circle)
+
+i, dir_correct  = findr(rays,ax)
+print(i,dir_correct)
+
+for dir in rays:
+    data = raydata(dir)
+    if dir not in dir_correct:
+        ax.plot(dir*data,data-0.5, c='green')
+    else:
+        ax.plot(dir*data, data-0.5, c='purple')
+
 
 plt.show()
 
