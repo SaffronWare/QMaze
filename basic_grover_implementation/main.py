@@ -21,7 +21,8 @@ rays = [i / (N - 1) - 0.5 for i in range(N)]
 _raw    = (random.uniform(-0.4, 0.4), random.uniform(-0.4, 0.4))
 _ty     = _raw[1] + 0.5
 _snap   = min(rays, key=lambda d: abs(_ty * d - _raw[0]))
-target  = (_ty * _snap, _raw[1])
+#target  = (_ty * _snap, _raw[1])
+target = _raw
 print(f"Target: {target}")
 
 
