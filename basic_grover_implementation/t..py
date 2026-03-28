@@ -162,7 +162,6 @@ class QuantumSolver:
         # optimal number of Grover iterations
         theta     = math.asin(math.sqrt(M / N))
         num_iters = max(1, round((math.pi / (4 * theta)) - 0.5))
-        #num_iters = 10
         print(f"Hits (classical): {hits}  |  Grover iters: {num_iters}")
 
         qr = QuantumRegister(num_qbits, 'q')
