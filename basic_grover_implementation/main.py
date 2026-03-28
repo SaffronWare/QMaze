@@ -60,30 +60,6 @@ class DigitalSolver:
 
 
 # ─── Quantum arithmetic oracle ─────────────────────────────────────────────────
-#
-# Hit condition (same maths as DigitalSolver):
-#   |ty * dir_i  -  target_x| <= radius
-#   where  ty     = (target_y + 0.5)
-#          dir_i  = i/(N-1) - 0.5
-#
-# In exact integer arithmetic (multiply through, no approximation):
-#   A(i) = 2*TY*i  -  TY*(N-1)          (scaled direction * scaled ty)
-#   Hit  iff   LOWER <= A(i) <= UPPER
-#   where  TY    = round((target_y + 0.5) * SCALE)
-#          TX    = round(target_x * SCALE)
-#          LOWER = 2*(N-1)*TX - round(2*(N-1)*SCALE*radius)  + TY*(N-1)
-#          UPPER = LOWER + 2*round(2*(N-1)*SCALE*radius)
-#
-# Because A(i) = C1*i  (with C1 = 2*TY, a constant), the circuit only needs to:
-#   1. Compute  acc = C1 * i   via 4 controlled-additions (one per input qubit bit)
-#   2. Subtract LOWER from acc; read MSB (1 = underflow = i < LOWER)
-#   3. Subtract UPPER+1 from acc; read MSB (1 = i <= UPPER)
-#   4. Phase-kickback when both conditions hold: no underflow at step 2 AND underflow at step 3
-#   5. Uncompute everything to leave ancilla clean
-#
-# Arithmetic is implemented with Draper's QFT-based constant adder (no carry ancilla).
-# Simulation uses AerSimulator with method='matrix_product_state' for speed.
-
 class QuantumSolver:
 
     # ── Fixed-point constants (computed once per target) ──────────────────────
@@ -234,12 +210,6 @@ class QuantumSolver:
         num_iters = max(1, round(math.pi / (4 * theta) - 0.5))
         print(f"Hits (classical): {hits}  |  M={M}  |  Grover iters: {num_iters}")
 
-        # ── Qubit layout ──────────────────────────────────────────────────────
-        # n_acc must satisfy:
-        #   • 2^(n_acc-1) > UPPER   (so subtraction of UPPER+1 from a value
-        #                             in [0, UPPER] produces MSB=1 correctly)
-        #   • UPPER < 2^n_acc
-        # Since UPPER = C1*(N-1) at most, we need ceil(log2(C1*(N-1)+1))+1 bits.
         n_acc  = math.ceil(math.log2(max(UPPER, C1 * (N - 1)) + 2)) + 1
         q_in   = list(range(num_qbits))
         q_acc  = list(range(num_qbits, num_qbits + n_acc))
@@ -250,24 +220,29 @@ class QuantumSolver:
         print(f"n_acc={n_acc}, total qubits={total}")
 
         qc = QuantumCircuit(total, num_qbits)
-
-        # Uniform superposition on search register
         qc.h(q_in)
-        # Phase-kickback ancilla in |−⟩
         qc.x(q_ph); qc.h(q_ph)
         qc.barrier()
 
-        for _ in range(num_iters):
+        print(f"Building circuit ({num_iters} Grover iteration(s))...")
+        for it in range(num_iters):
+            print(f"  [{it+1}/{num_iters}] oracle...", flush=True)
             QuantumSolver.Oracle(qc, q_in, q_acc, q_msb1, q_msb2, q_ph,
                                   n_acc, C1, LOWER, UPPER)
+            print(f"  [{it+1}/{num_iters}] diffuser...", flush=True)
             QuantumSolver.Diffuse(qc, q_in)
 
         qc.measure(q_in, range(num_qbits))
+        print(f"Circuit built — depth={qc.depth()}, gates={qc.size()}")
 
-        # MPS simulator: handles deep circuits on 20+ qubits efficiently
-        sim    = AerSimulator(method='matrix_product_state')
-        tqc    = transpile(qc, sim)
+        import time
+        print("Transpiling...", flush=True)
+        sim = AerSimulator(method='matrix_product_state')
+        tqc = transpile(qc, sim)
+        print("Simulating (2048 shots, MPS)...", flush=True)
+        t0     = time.time()
         counts = sim.run(tqc, shots=2048).result().get_counts()
+        print(f"Done in {time.time()-t0:.1f}s")
 
         # Qiskit bitstrings are MSB-first → int(k, 2) directly gives the index
         total_shots = sum(counts.values())
@@ -282,11 +257,12 @@ class QuantumSolver:
     # ── Visualise ─────────────────────────────────────────────────────────────
     @staticmethod
     def _show_results(index_probs, hits, qc):
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        from matplotlib.lines import Line2D
+
+        # ── Figure 1: rays + probability ─────────────────────────────────────
+        fig, (ax, ax2) = plt.subplots(1, 2, figsize=(12, 6))
         fig.suptitle("Grover's Algorithm — Arithmetic Quantum Ray Solver", fontsize=14)
 
-        # Ray plot
-        ax = axes[0]
         ax.set_aspect(1)
         ax.set_xlim((-0.5 - world_border, 0.5 + world_border))
         ax.set_ylim((-0.5 - world_border, 0.5 + world_border))
@@ -295,7 +271,6 @@ class QuantumSolver:
                                         linewidth=2, edgecolor='r', facecolor='none'))
         ax.add_patch(patches.Circle(target, radius, color='blue'))
         top_idx = max(index_probs, key=index_probs.get)
-        from matplotlib.lines import Line2D
         for i, d in enumerate(rays):
             data = np.linspace(0, 1, 50)
             if   i in hits:     ax.plot(d * data, data - 0.5, c='purple', lw=2.5)
@@ -307,8 +282,6 @@ class QuantumSolver:
             Line2D([0],[0], color='green',  lw=1, label='miss'),
         ], fontsize=8)
 
-        # Probability histogram
-        ax2 = axes[1]
         bar_probs  = [index_probs.get(i, 0) for i in range(N)]
         bar_colors = ['purple' if i in hits else 'steelblue' for i in range(N)]
         ax2.bar(range(N), bar_probs, color=bar_colors)
@@ -316,18 +289,14 @@ class QuantumSolver:
         ax2.set_xlabel("Ray index"); ax2.set_ylabel("Probability")
         ax2.set_title("Measured Distribution\n(purple = true hit)"); ax2.legend()
 
-        # Circuit diagram
-        ax3 = axes[2]; ax3.axis('off')
-        cfig = qc.draw('mpl', fold=40)
-        cfig.savefig('/tmp/circuit.png', bbox_inches='tight', dpi=72)
-        plt.close(cfig)
-        ax3.imshow(plt.imread('/tmp/circuit.png'))
-        ax3.set_title("Grover Circuit")
-
         plt.tight_layout(); plt.show()
+
+        # ── Figure 2: circuit diagram (separate window, no file needed) ───────
+        qc.draw('mpl', fold=40)
+        plt.show()
 
 
 # ─── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    DigitalSolver.show_demo()
+    #DigitalSolver.show_demo()
     QuantumSolver.Grover()
